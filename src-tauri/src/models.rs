@@ -12,6 +12,10 @@ const fn default_citation_start_index() -> usize {
     1
 }
 
+const fn default_next_citation_index() -> usize {
+    1
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LibraryEntry {
     pub key: String,
@@ -32,6 +36,10 @@ pub struct PersistedState {
     pub citation_order: Vec<String>,
     #[serde(default = "default_citation_start_index")]
     pub citation_start_index: usize,
+    #[serde(default)]
+    pub citation_index_by_key: BTreeMap<String, usize>,
+    #[serde(default = "default_next_citation_index")]
+    pub next_citation_index: usize,
 }
 
 impl Default for PersistedState {
@@ -41,6 +49,8 @@ impl Default for PersistedState {
             entries: BTreeMap::new(),
             citation_order: Vec::new(),
             citation_start_index: default_citation_start_index(),
+            citation_index_by_key: BTreeMap::new(),
+            next_citation_index: default_next_citation_index(),
         }
     }
 }
@@ -68,7 +78,7 @@ impl AppSnapshot {
             imported_keys: state.imported_keys(),
             citation_order: state.citation_order.clone(),
             citation_start_index: state.citation_start_index,
-            next_citation_index: state.citation_start_index + state.citation_order.len(),
+            next_citation_index: state.next_citation_index,
         }
     }
 }

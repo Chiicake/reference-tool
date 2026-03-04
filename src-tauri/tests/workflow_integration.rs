@@ -162,7 +162,7 @@ fn sequence_start_can_be_configured_and_resets_after_citation_clear() {
         .expect("single entry import should succeed");
 
     app_state
-        .set_next_citation_index(12)
+        .set_next_citation_index(Some(12))
         .expect("setting sequence start should work when citations are empty");
 
     let first_cite = app_state
@@ -177,7 +177,7 @@ fn sequence_start_can_be_configured_and_resets_after_citation_clear() {
     let second_cite = app_state
         .cite_keys("9750059")
         .expect("citation after clear should restart from configured start");
-    assert_eq!(second_cite.citation_text, "[12]");
+    assert_eq!(second_cite.citation_text, "[1]");
 
     cleanup_if_exists(&path);
 }

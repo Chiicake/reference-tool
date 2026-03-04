@@ -224,24 +224,31 @@ function App() {
       return;
     }
 
-    const parsed = Number.parseInt(nextCitationIndexInput, 10);
-    if (!Number.isInteger(parsed) || parsed < 1) {
-      setStatusText("起始序号必须是大于等于 1 的整数。");
-      return;
+    const normalizedInput = nextCitationIndexInput.trim();
+    let nextIndex: number | null = null;
+
+    if (normalizedInput.length > 0) {
+      const parsed = Number.parseInt(normalizedInput, 10);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        setStatusText("下一个序号必须是大于等于 1 的整数；留空则自动按上一个序号+1。");
+        return;
+      }
+
+      nextIndex = parsed;
     }
 
     setIsSettingNextIndex(true);
 
     try {
       const snapshot = await invoke<AppSnapshot>("set_next_citation_index", {
-        nextIndex: parsed,
+        nextIndex,
       });
       setNextCitationIndexInput(snapshot.nextCitationIndex.toString());
       setStatusText(
         `下一个引用序号已设置为 ${snapshot.nextCitationIndex}。`,
       );
     } catch (error) {
-      setStatusText(`设置起始序号失败：${toErrorMessage(error)}`);
+      setStatusText(`设置下一个序号失败：${toErrorMessage(error)}`);
     } finally {
       setIsSettingNextIndex(false);
     }
@@ -315,7 +322,7 @@ function App() {
             />
 
             <label className="field-title" htmlFor="next-citation-index">
-              设置下一个序号从多少开始（仅在“已有引用文献”为空时可设置）
+              设置下一个序号（可在任意时刻设置，留空则按上一个序号自动+1）
             </label>
             <div className="inline-setting-row">
               <input
@@ -326,6 +333,7 @@ function App() {
                 step={1}
                 value={nextCitationIndexInput}
                 onChange={(event) => setNextCitationIndexInput(event.currentTarget.value)}
+                placeholder="留空自动+1，例如手动设置为16"
               />
               <button
                 type="button"
@@ -333,7 +341,7 @@ function App() {
                 onClick={() => void handleSetNextCitationIndex()}
                 disabled={isSettingNextIndex || isLoading}
               >
-                {isSettingNextIndex ? "设置中..." : "设置起始"}
+                {isSettingNextIndex ? "设置中..." : "设置下一个"}
               </button>
             </div>
 

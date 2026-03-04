@@ -90,7 +90,7 @@ pub fn clear_citations(state: State<'_, SharedAppState>) -> Result<AppSnapshot, 
 
 #[tauri::command]
 pub fn set_next_citation_index(
-    next_index: usize,
+    next_index: Option<usize>,
     state: State<'_, SharedAppState>,
 ) -> Result<AppSnapshot, String> {
     let mut app_state = state
