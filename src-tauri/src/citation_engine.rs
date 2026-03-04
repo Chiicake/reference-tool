@@ -1,3 +1,12 @@
+pub fn parse_citation_keys(raw_input: &str) -> Vec<String> {
+    raw_input
+        .split(|ch: char| ch == ',' || ch == '，' || ch.is_whitespace())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
 pub fn compress_citation_indexes(indexes: &[usize]) -> String {
     if indexes.is_empty() {
         return String::new();
@@ -36,7 +45,22 @@ fn format_range(start: usize, end: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::compress_citation_indexes;
+    use super::{compress_citation_indexes, parse_citation_keys};
+
+    #[test]
+    fn parses_keys_with_commas_whitespace_and_newlines() {
+        let parsed = parse_citation_keys("10495806,10648348\n10980318 10807485，9750059");
+        assert_eq!(
+            parsed,
+            vec!["10495806", "10648348", "10980318", "10807485", "9750059"]
+        );
+    }
+
+    #[test]
+    fn parsing_drops_empty_tokens() {
+        let parsed = parse_citation_keys(" ,\n，\t ");
+        assert!(parsed.is_empty());
+    }
 
     #[test]
     fn compresses_empty_input_to_empty_string() {

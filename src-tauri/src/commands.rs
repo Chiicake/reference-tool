@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use tauri::State;
 
 use crate::bib_parser;
-use crate::models::{AppSnapshot, ImportResult};
+use crate::models::{AppSnapshot, CiteResult, ImportResult};
 use crate::state::AppState;
 
 pub type SharedAppState = RwLock<AppState>;
@@ -46,6 +46,15 @@ pub fn import_bib_file(
         .map_err(|_| "Failed to write app state: lock poisoned".to_string())?;
 
     app_state.import_entries(parsed_entries)
+}
+
+#[tauri::command]
+pub fn cite_keys(input: String, state: State<'_, SharedAppState>) -> Result<CiteResult, String> {
+    let mut app_state = state
+        .write()
+        .map_err(|_| "Failed to write app state: lock poisoned".to_string())?;
+
+    app_state.cite_keys(&input)
 }
 
 fn ensure_bib_extension(path: &str) -> Result<(), String> {

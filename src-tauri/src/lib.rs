@@ -22,7 +22,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_snapshot,
             commands::get_storage_path,
-            commands::import_bib_file
+            commands::import_bib_file,
+            commands::cite_keys
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

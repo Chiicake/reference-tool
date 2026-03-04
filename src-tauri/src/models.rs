@@ -72,3 +72,11 @@ pub struct ImportResult {
     pub failed: usize,
     pub message: String,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CiteResult {
+    pub citation_text: String,
+    pub cited_references_text: String,
+    pub newly_added_count: usize,
+}
