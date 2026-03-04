@@ -184,6 +184,13 @@ button:active {
   transform: translateY(0);
 }
 
+button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
   color: #f6fbff;
@@ -239,6 +246,12 @@ button:active {
 
 .key-list li:last-child {
   border-bottom: none;
+}
+
+.key-list li.empty-state {
+  border-bottom: none;
+  color: var(--ink-500);
+  font-family: var(--font-body);
 }
 
 .status-bar {

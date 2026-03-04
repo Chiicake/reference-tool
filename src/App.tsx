@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
 type AppSnapshot = {
@@ -8,65 +9,44 @@ type AppSnapshot = {
   citationOrder: string[];
 };
 
-const demoImportedKeys = [
-  "9750059",
-  "10495806",
-  "10648348",
-  "10980318",
-  "10807485",
-  "9473521",
-  "9354193",
-  "1474.1-1999",
-];
+type ImportResult = {
+  total: number;
+  imported: number;
+  newCount: number;
+  overwrittenCount: number;
+  failed: number;
+  message: string;
+};
 
-const demoReferences = [
-  "[1] Wang X, Liu L, Tang T, Sun W. Enhancing Communication-Based Train Control Systems Through Train-to-Train Communications[J]. IEEE Transactions on Intelligent Transportation Systems, 2019, 20(4): 1544-1561.",
-  "[2] IEEE Std 1474.1-1999, IEEE Standard for Communication Based Train Control Performance Requirements and Functional Requirements[S]. New York: IEEE, 1999: 1-36. DOI: 10.1109/IEEESTD.1999.90611.",
-  "[3] Liu X, Yu Y, Li F, Durrani T S. Throughput Maximization for RIS-UAV Relaying Communications[J]. IEEE Transactions on Intelligent Transportation Systems, 2022, 23(10): 19569-19574. DOI: 10.1109/TITS.2022.3161698.",
-];
+type CiteResult = {
+  citationText: string;
+  citedReferencesText: string;
+  newlyAddedCount: number;
+};
 
-const demoIndexByKey = new Map<string, number>([
-  ["9354193", 1],
-  ["1474.1-1999", 2],
-  ["9750059", 3],
-  ["10495806", 4],
-  ["10648348", 5],
-  ["10980318", 6],
-  ["10807485", 7],
-  ["9473521", 8],
-]);
+type ErrorLike = {
+  message?: string;
+};
 
-function parseKeys(rawInput: string): string[] {
-  return rawInput
-    .split(/[\s,，]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0);
-}
-
-function compressIndexes(indexes: number[]): string {
-  const sorted = [...new Set(indexes)].sort((a, b) => a - b);
-  if (sorted.length === 0) {
-    return "";
+function toErrorMessage(error: unknown): string {
+  if (typeof error === "string") {
+    return error;
   }
 
-  const sections: string[] = [];
-  let start = sorted[0];
-  let previous = sorted[0];
-
-  for (let i = 1; i < sorted.length; i += 1) {
-    const current = sorted[i];
-    if (current === previous + 1) {
-      previous = current;
-      continue;
+  if (typeof error === "object" && error !== null) {
+    const maybeMessage = (error as ErrorLike).message;
+    if (typeof maybeMessage === "string" && maybeMessage.trim().length > 0) {
+      return maybeMessage;
     }
 
-    sections.push(start === previous ? `[${start}]` : `[${start}]-[${previous}]`);
-    start = current;
-    previous = current;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Unknown error";
+    }
   }
 
-  sections.push(start === previous ? `[${start}]` : `[${start}]-[${previous}]`);
-  return sections.join(", ");
+  return "Unknown error";
 }
 
 function App() {
@@ -74,38 +54,57 @@ function App() {
     "10495806,10648348,10980318,10807485",
   );
   const [citationOutput, setCitationOutput] = useState("");
-  const [statusText, setStatusText] = useState(
-    "正在加载本地存储状态...",
-  );
-  const citedReferencesText = useMemo(() => demoReferences.join("\n\n"), []);
+  const [citedReferencesText, setCitedReferencesText] = useState("");
+  const [importedKeys, setImportedKeys] = useState<string[]>([]);
+  const [statusText, setStatusText] = useState("正在加载本地文献状态...");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isCiting, setIsCiting] = useState(false);
+
+  const refreshSnapshot = useCallback(async (): Promise<AppSnapshot> => {
+    const [snapshot, referencesText] = await Promise.all([
+      invoke<AppSnapshot>("get_app_snapshot"),
+      invoke<string>("get_cited_references_text"),
+    ]);
+
+    setImportedKeys(snapshot.importedKeys);
+    setCitedReferencesText(referencesText);
+
+    return snapshot;
+  }, []);
 
   useEffect(() => {
-    let active = true;
+    let mounted = true;
 
-    void invoke<AppSnapshot>("get_app_snapshot")
-      .then((snapshot) => {
-        if (!active) {
+    void (async () => {
+      setIsLoading(true);
+
+      try {
+        const snapshot = await refreshSnapshot();
+        if (!mounted) {
+          return;
+        }
+
+        setStatusText(`已加载 ${snapshot.totalEntries} 条本地文献，可开始导入或引用。`);
+      } catch (error) {
+        if (!mounted) {
           return;
         }
 
         setStatusText(
-          `Step 2 已接入持久化状态层：已加载 ${snapshot.totalEntries} 条本地文献。`,
+          `加载本地状态失败：${toErrorMessage(error)}。请在 Tauri 桌面环境中运行。`,
         );
-      })
-      .catch(() => {
-        if (!active) {
-          return;
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
         }
-
-        setStatusText(
-          "Step 2 已完成存储层开发；当前预览环境未连接 Tauri 后端，显示演示数据。",
-        );
-      });
+      }
+    })();
 
     return () => {
-      active = false;
+      mounted = false;
     };
-  }, []);
+  }, [refreshSnapshot]);
 
   async function copyText(content: string, label: string): Promise<void> {
     if (!content.trim()) {
@@ -121,29 +120,72 @@ function App() {
     }
   }
 
-  function handleDemoCite(): void {
-    const keys = parseKeys(citationInput);
-    if (keys.length === 0) {
-      setCitationOutput("");
-      setStatusText("请输入至少一个引用 key。示例：10495806,10648348");
+  async function handleImportBib(): Promise<void> {
+    if (isImporting) {
       return;
     }
 
-    const missing = keys.filter((key) => !demoIndexByKey.has(key));
-    if (missing.length > 0) {
-      setCitationOutput("");
-      setStatusText(`以下 key 暂未导入：${missing.join(", ")}`);
+    setIsImporting(true);
+
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "BibTeX", extensions: ["bib"] }],
+      });
+
+      if (selected === null) {
+        setStatusText("已取消导入。未选择 bib 文件。");
+        return;
+      }
+
+      if (Array.isArray(selected)) {
+        setStatusText("当前版本仅支持一次导入一个 bib 文件。请选择单个文件。");
+        return;
+      }
+
+      const importResult = await invoke<ImportResult>("import_bib_file", {
+        path: selected,
+      });
+      const snapshot = await refreshSnapshot();
+
+      setStatusText(
+        `${importResult.message} 当前库内共 ${snapshot.totalEntries} 条文献。`,
+      );
+    } catch (error) {
+      setStatusText(`导入失败：${toErrorMessage(error)}`);
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  async function handleCite(): Promise<void> {
+    if (isCiting) {
       return;
     }
 
-    const indexes = keys
-      .map((key) => demoIndexByKey.get(key))
-      .filter((value): value is number => value !== undefined);
+    setIsCiting(true);
 
-    setCitationOutput(compressIndexes(indexes));
-    setStatusText(
-      "当前为界面演示数据，后续步骤会替换为导入 bib 后的真实编号逻辑。",
-    );
+    try {
+      const result = await invoke<CiteResult>("cite_keys", {
+        input: citationInput,
+      });
+
+      setCitationOutput(result.citationText);
+      setCitedReferencesText(result.citedReferencesText);
+
+      if (result.newlyAddedCount > 0) {
+        setStatusText(
+          `引用完成：新增 ${result.newlyAddedCount} 条引用并返回编号 ${result.citationText}。`,
+        );
+      } else {
+        setStatusText(`引用完成：全部为已有引用，返回编号 ${result.citationText}。`);
+      }
+    } catch (error) {
+      setCitationOutput("");
+      setStatusText(`引用失败：${toErrorMessage(error)}`);
+    } finally {
+      setIsCiting(false);
+    }
   }
 
   return (
@@ -152,7 +194,7 @@ function App() {
         <p className="eyebrow">Reference Workspace</p>
         <h1>文献引用管理工具</h1>
         <p className="subtitle">
-          轻量 Tauri 桌面应用骨架，支持 bib 导入、按 key 引用与参考文献总表输出。
+          导入 bib 文献库，按 key 引用并自动维护编号化参考文献总表。
         </p>
       </header>
 
@@ -191,8 +233,13 @@ function App() {
               >
                 复制返回
               </button>
-              <button type="button" className="primary" onClick={handleDemoCite}>
-                引用
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void handleCite()}
+                disabled={isCiting || isLoading}
+              >
+                {isCiting ? "引用中..." : "引用"}
               </button>
             </div>
           </article>
@@ -212,22 +259,30 @@ function App() {
               className="cited-output"
               readOnly
               value={citedReferencesText}
+              placeholder="引用后将在这里显示按编号排列的参考文献总表。"
             />
           </article>
         </div>
 
         <aside className="panel right-column">
           <div className="panel-header">
-            <h2>已导入文献 Key</h2>
-            <button type="button" className="primary ghosted">
-              导入 .bib
+            <h2>已导入文献 Key（{importedKeys.length}）</h2>
+            <button
+              type="button"
+              className="primary ghosted"
+              onClick={() => void handleImportBib()}
+              disabled={isImporting || isLoading}
+            >
+              {isImporting ? "导入中..." : "导入 .bib"}
             </button>
           </div>
 
           <ul className="key-list">
-            {demoImportedKeys.map((key) => (
-              <li key={key}>{key}</li>
-            ))}
+            {importedKeys.length > 0 ? (
+              importedKeys.map((key) => <li key={key}>{key}</li>)
+            ) : (
+              <li className="empty-state">暂无已导入 key，请先导入 bib 文件。</li>
+            )}
           </ul>
         </aside>
       </section>

@@ -29,6 +29,15 @@ pub fn get_storage_path(state: State<'_, SharedAppState>) -> Result<String, Stri
 }
 
 #[tauri::command]
+pub fn get_cited_references_text(state: State<'_, SharedAppState>) -> Result<String, String> {
+    let app_state = state
+        .read()
+        .map_err(|_| "Failed to read app state: lock poisoned".to_string())?;
+
+    Ok(app_state.cited_references_text())
+}
+
+#[tauri::command]
 pub fn import_bib_file(
     path: String,
     state: State<'_, SharedAppState>,

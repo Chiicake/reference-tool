@@ -41,6 +41,10 @@ impl AppState {
         AppSnapshot::from_persisted(&self.persisted)
     }
 
+    pub fn cited_references_text(&self) -> String {
+        self.build_cited_references_text(OutputFormat::DefaultV1)
+    }
+
     pub fn import_entries(&mut self, entries: Vec<LibraryEntry>) -> Result<ImportResult, String> {
         let total = entries.len();
         let mut new_count = 0;
@@ -115,7 +119,7 @@ impl AppState {
         }
 
         let citation_text = compress_citation_indexes(&resolved_indexes);
-        let cited_references_text = self.build_cited_references_text(OutputFormat::DefaultV1);
+        let cited_references_text = self.cited_references_text();
 
         self.storage
             .save(&self.persisted)
