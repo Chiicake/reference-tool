@@ -25,7 +25,10 @@ pub fn run() {
             commands::get_storage_path,
             commands::get_cited_references_text,
             commands::import_bib_file,
-            commands::cite_keys
+            commands::cite_keys,
+            commands::clear_library,
+            commands::clear_citations,
+            commands::set_next_citation_index
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

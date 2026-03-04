@@ -8,6 +8,10 @@ const fn default_state_version() -> u32 {
     STATE_VERSION
 }
 
+const fn default_citation_start_index() -> usize {
+    1
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LibraryEntry {
     pub key: String,
@@ -26,6 +30,8 @@ pub struct PersistedState {
     pub entries: BTreeMap<String, LibraryEntry>,
     #[serde(default)]
     pub citation_order: Vec<String>,
+    #[serde(default = "default_citation_start_index")]
+    pub citation_start_index: usize,
 }
 
 impl Default for PersistedState {
@@ -34,6 +40,7 @@ impl Default for PersistedState {
             version: STATE_VERSION,
             entries: BTreeMap::new(),
             citation_order: Vec::new(),
+            citation_start_index: default_citation_start_index(),
         }
     }
 }
@@ -50,6 +57,8 @@ pub struct AppSnapshot {
     pub total_entries: usize,
     pub imported_keys: Vec<String>,
     pub citation_order: Vec<String>,
+    pub citation_start_index: usize,
+    pub next_citation_index: usize,
 }
 
 impl AppSnapshot {
@@ -58,6 +67,8 @@ impl AppSnapshot {
             total_entries: state.entries.len(),
             imported_keys: state.imported_keys(),
             citation_order: state.citation_order.clone(),
+            citation_start_index: state.citation_start_index,
+            next_citation_index: state.citation_start_index + state.citation_order.len(),
         }
     }
 }

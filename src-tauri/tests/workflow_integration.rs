@@ -147,3 +147,37 @@ fn cite_transaction_rolls_back_on_missing_key() {
 
     cleanup_if_exists(&path);
 }
+
+#[test]
+fn sequence_start_can_be_configured_and_resets_after_citation_clear() {
+    let path = unique_state_path("custom-sequence-start");
+    let storage = Storage::new(path.clone());
+
+    let mut app_state =
+        AppState::from_storage(storage).expect("app state initialization should succeed");
+
+    let imported_entries = parse_bib_entries(SINGLE_ENTRY_BIB).expect("single bib should parse");
+    app_state
+        .import_entries(imported_entries)
+        .expect("single entry import should succeed");
+
+    app_state
+        .set_next_citation_index(12)
+        .expect("setting sequence start should work when citations are empty");
+
+    let first_cite = app_state
+        .cite_keys("9750059")
+        .expect("citation should use configured sequence start");
+    assert_eq!(first_cite.citation_text, "[12]");
+
+    app_state
+        .clear_citations()
+        .expect("clear citations should succeed");
+
+    let second_cite = app_state
+        .cite_keys("9750059")
+        .expect("citation after clear should restart from configured start");
+    assert_eq!(second_cite.citation_text, "[12]");
+
+    cleanup_if_exists(&path);
+}

@@ -49,6 +49,10 @@ impl AppState {
         self.build_cited_references_text(OutputFormat::DefaultV1)
     }
 
+    pub fn next_citation_index(&self) -> usize {
+        self.persisted.citation_start_index + self.persisted.citation_order.len()
+    }
+
     pub fn import_entries(&mut self, entries: Vec<LibraryEntry>) -> Result<ImportResult, String> {
         let total = entries.len();
         let mut new_count = 0;
@@ -84,6 +88,41 @@ impl AppState {
         })
     }
 
+    pub fn clear_library(&mut self) -> Result<(), String> {
+        self.persisted.entries.clear();
+        self.persisted.citation_order.clear();
+
+        self.storage
+            .save(&self.persisted)
+            .map_err(|error| format!("Failed to clear library: {error}"))
+    }
+
+    pub fn clear_citations(&mut self) -> Result<(), String> {
+        self.persisted.citation_order.clear();
+
+        self.storage
+            .save(&self.persisted)
+            .map_err(|error| format!("Failed to clear citations: {error}"))
+    }
+
+    pub fn set_next_citation_index(&mut self, next_index: usize) -> Result<(), String> {
+        if next_index == 0 {
+            return Err("Next citation index must be >= 1".to_string());
+        }
+
+        if !self.persisted.citation_order.is_empty() {
+            return Err(
+                "Cannot set next citation index while cited references are not empty. Clear cited references first."
+                    .to_string(),
+            );
+        }
+
+        self.persisted.citation_start_index = next_index;
+        self.storage
+            .save(&self.persisted)
+            .map_err(|error| format!("Failed to update citation start index: {error}"))
+    }
+
     pub fn cite_keys(&mut self, raw_input: &str) -> Result<CiteResult, String> {
         let keys = parse_citation_keys(raw_input);
         if keys.is_empty() {
@@ -103,7 +142,7 @@ impl AppState {
             .citation_order
             .iter()
             .enumerate()
-            .map(|(position, key)| (key.clone(), position + 1))
+            .map(|(position, key)| (key.clone(), self.citation_index_for_position(position)))
             .collect::<HashMap<_, _>>();
 
         let mut resolved_indexes = Vec::with_capacity(keys.len());
@@ -116,7 +155,8 @@ impl AppState {
             }
 
             self.persisted.citation_order.push(key.clone());
-            let assigned_index = self.persisted.citation_order.len();
+            let assigned_index =
+                self.citation_index_for_position(self.persisted.citation_order.len() - 1);
             index_by_key.insert(key, assigned_index);
             resolved_indexes.push(assigned_index);
             newly_added_count += 1;
@@ -168,10 +208,18 @@ impl AppState {
                     .map(|entry| format_entry(entry, output_format))
                     .unwrap_or_else(|| format!("[Missing entry for key: {key}]"));
 
-                format!("[{}]  {}", index + 1, formatted)
+                format!(
+                    "[{}]  {}",
+                    self.citation_index_for_position(index),
+                    formatted
+                )
             })
             .collect::<Vec<_>>()
             .join("\n\n")
+    }
+
+    fn citation_index_for_position(&self, position: usize) -> usize {
+        self.persisted.citation_start_index + position
     }
 
     pub fn storage_path(&self) -> String {
@@ -402,6 +450,108 @@ mod tests {
             persisted.citation_order,
             vec!["k2".to_string(), "k1".to_string()]
         );
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn clear_citations_resets_to_start_index() {
+        let path = unique_state_path("clear-citations");
+        let storage = Storage::new(path.clone());
+
+        let mut persisted = PersistedState::default();
+        persisted.citation_start_index = 10;
+        persisted
+            .entries
+            .insert("k1".to_string(), build_entry("k1", "Reference A"));
+        persisted.citation_order = vec!["k1".to_string()];
+
+        let mut app_state = AppState { storage, persisted };
+        app_state
+            .clear_citations()
+            .expect("clearing citations should succeed");
+
+        let result = app_state
+            .cite_keys("k1")
+            .expect("citation after clear should use start index");
+
+        assert_eq!(result.citation_text, "[10]");
+        assert_eq!(result.newly_added_count, 1);
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn set_next_citation_index_requires_empty_citations() {
+        let path = unique_state_path("set-next-guard");
+        let storage = Storage::new(path.clone());
+
+        let mut persisted = PersistedState::default();
+        persisted
+            .entries
+            .insert("k1".to_string(), build_entry("k1", "Reference A"));
+        persisted.citation_order = vec!["k1".to_string()];
+
+        let mut app_state = AppState { storage, persisted };
+
+        let error = app_state
+            .set_next_citation_index(50)
+            .expect_err("should reject when citations are not empty");
+        assert!(error.contains("Clear cited references first"));
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn set_next_citation_index_applies_to_first_new_citation() {
+        let path = unique_state_path("set-next-apply");
+        let storage = Storage::new(path.clone());
+
+        let mut persisted = PersistedState::default();
+        persisted
+            .entries
+            .insert("k1".to_string(), build_entry("k1", "Reference A"));
+        let mut app_state = AppState { storage, persisted };
+
+        app_state
+            .set_next_citation_index(25)
+            .expect("set next citation index should succeed");
+
+        let result = app_state
+            .cite_keys("k1")
+            .expect("citation should use configured next index");
+
+        assert_eq!(result.citation_text, "[25]");
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn clear_library_removes_entries_and_citations() {
+        let path = unique_state_path("clear-library");
+        let storage = Storage::new(path.clone());
+
+        let mut persisted = PersistedState::default();
+        persisted
+            .entries
+            .insert("k1".to_string(), build_entry("k1", "Reference A"));
+        persisted.citation_order = vec!["k1".to_string()];
+
+        let mut app_state = AppState { storage, persisted };
+        app_state
+            .clear_library()
+            .expect("clear library should succeed");
+
+        assert!(app_state.persisted.entries.is_empty());
+        assert!(app_state.persisted.citation_order.is_empty());
 
         if path.exists() {
             std::fs::remove_file(path).expect("cleanup state file");

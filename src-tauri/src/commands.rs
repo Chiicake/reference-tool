@@ -68,6 +68,39 @@ pub fn cite_keys(input: String, state: State<'_, SharedAppState>) -> Result<Cite
     app_state.cite_keys(&input)
 }
 
+#[tauri::command]
+pub fn clear_library(state: State<'_, SharedAppState>) -> Result<AppSnapshot, String> {
+    let mut app_state = state
+        .write()
+        .map_err(|_| "Failed to write app state: lock poisoned".to_string())?;
+
+    app_state.clear_library()?;
+    Ok(app_state.snapshot())
+}
+
+#[tauri::command]
+pub fn clear_citations(state: State<'_, SharedAppState>) -> Result<AppSnapshot, String> {
+    let mut app_state = state
+        .write()
+        .map_err(|_| "Failed to write app state: lock poisoned".to_string())?;
+
+    app_state.clear_citations()?;
+    Ok(app_state.snapshot())
+}
+
+#[tauri::command]
+pub fn set_next_citation_index(
+    next_index: usize,
+    state: State<'_, SharedAppState>,
+) -> Result<AppSnapshot, String> {
+    let mut app_state = state
+        .write()
+        .map_err(|_| "Failed to write app state: lock poisoned".to_string())?;
+
+    app_state.set_next_citation_index(next_index)?;
+    Ok(app_state.snapshot())
+}
+
 fn ensure_bib_extension(path: &str) -> Result<(), String> {
     let extension_ok = Path::new(path)
         .extension()

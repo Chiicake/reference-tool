@@ -7,6 +7,8 @@ type AppSnapshot = {
   totalEntries: number;
   importedKeys: string[];
   citationOrder: string[];
+  citationStartIndex: number;
+  nextCitationIndex: number;
 };
 
 type ImportResult = {
@@ -57,9 +59,13 @@ function App() {
   const [citedReferencesText, setCitedReferencesText] = useState("");
   const [importedKeys, setImportedKeys] = useState<string[]>([]);
   const [statusText, setStatusText] = useState("正在加载本地文献状态...");
+  const [nextCitationIndexInput, setNextCitationIndexInput] = useState("1");
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
   const [isCiting, setIsCiting] = useState(false);
+  const [isClearingLibrary, setIsClearingLibrary] = useState(false);
+  const [isClearingCitations, setIsClearingCitations] = useState(false);
+  const [isSettingNextIndex, setIsSettingNextIndex] = useState(false);
 
   const refreshSnapshot = useCallback(async (): Promise<AppSnapshot> => {
     const [snapshot, referencesText] = await Promise.all([
@@ -69,6 +75,7 @@ function App() {
 
     setImportedKeys(snapshot.importedKeys);
     setCitedReferencesText(referencesText);
+    setNextCitationIndexInput(snapshot.nextCitationIndex.toString());
 
     return snapshot;
   }, []);
@@ -158,6 +165,88 @@ function App() {
     }
   }
 
+  async function handleClearLibrary(): Promise<void> {
+    if (isClearingLibrary) {
+      return;
+    }
+
+    const shouldClear = window.confirm(
+      "确认清空数据库吗？这会删除所有已导入文献，并清空已有引用列表。",
+    );
+    if (!shouldClear) {
+      return;
+    }
+
+    setIsClearingLibrary(true);
+
+    try {
+      await invoke<AppSnapshot>("clear_library");
+      const snapshot = await refreshSnapshot();
+      setCitationOutput("");
+      setStatusText(
+        `数据库已清空。当前文献数 ${snapshot.totalEntries}，下一个序号从 ${snapshot.nextCitationIndex} 开始。`,
+      );
+    } catch (error) {
+      setStatusText(`清空数据库失败：${toErrorMessage(error)}`);
+    } finally {
+      setIsClearingLibrary(false);
+    }
+  }
+
+  async function handleClearCitations(): Promise<void> {
+    if (isClearingCitations) {
+      return;
+    }
+
+    const shouldClear = window.confirm(
+      "确认清空已有引用吗？清空后引用编号将从起始序号重新计数。",
+    );
+    if (!shouldClear) {
+      return;
+    }
+
+    setIsClearingCitations(true);
+
+    try {
+      await invoke<AppSnapshot>("clear_citations");
+      const snapshot = await refreshSnapshot();
+      setCitationOutput("");
+      setStatusText(`已有引用已清空，下一个序号重置为 ${snapshot.nextCitationIndex}。`);
+    } catch (error) {
+      setStatusText(`清空已有引用失败：${toErrorMessage(error)}`);
+    } finally {
+      setIsClearingCitations(false);
+    }
+  }
+
+  async function handleSetNextCitationIndex(): Promise<void> {
+    if (isSettingNextIndex) {
+      return;
+    }
+
+    const parsed = Number.parseInt(nextCitationIndexInput, 10);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      setStatusText("起始序号必须是大于等于 1 的整数。");
+      return;
+    }
+
+    setIsSettingNextIndex(true);
+
+    try {
+      const snapshot = await invoke<AppSnapshot>("set_next_citation_index", {
+        nextIndex: parsed,
+      });
+      setNextCitationIndexInput(snapshot.nextCitationIndex.toString());
+      setStatusText(
+        `下一个引用序号已设置为 ${snapshot.nextCitationIndex}。`,
+      );
+    } catch (error) {
+      setStatusText(`设置起始序号失败：${toErrorMessage(error)}`);
+    } finally {
+      setIsSettingNextIndex(false);
+    }
+  }
+
   async function handleCite(): Promise<void> {
     if (isCiting) {
       return;
@@ -225,6 +314,29 @@ function App() {
               placeholder="点击“引用”后返回示例：[1]-[3], [5]"
             />
 
+            <label className="field-title" htmlFor="next-citation-index">
+              设置下一个序号从多少开始（仅在“已有引用文献”为空时可设置）
+            </label>
+            <div className="inline-setting-row">
+              <input
+                id="next-citation-index"
+                className="index-input"
+                type="number"
+                min={1}
+                step={1}
+                value={nextCitationIndexInput}
+                onChange={(event) => setNextCitationIndexInput(event.currentTarget.value)}
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void handleSetNextCitationIndex()}
+                disabled={isSettingNextIndex || isLoading}
+              >
+                {isSettingNextIndex ? "设置中..." : "设置起始"}
+              </button>
+            </div>
+
             <div className="action-row action-row-right">
               <button
                 type="button"
@@ -247,13 +359,23 @@ function App() {
           <article className="panel cited-panel">
             <div className="panel-header">
               <h2>已有引用文献</h2>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => void copyText(citedReferencesText, "已引用文献")}
-              >
-                复制
-              </button>
+              <div className="header-button-group">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void copyText(citedReferencesText, "已引用文献")}
+                >
+                  复制
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => void handleClearCitations()}
+                  disabled={isClearingCitations || isLoading}
+                >
+                  {isClearingCitations ? "清空中..." : "清空引用"}
+                </button>
+              </div>
             </div>
             <textarea
               className="cited-output"
@@ -267,14 +389,24 @@ function App() {
         <aside className="panel right-column">
           <div className="panel-header">
             <h2>已导入文献 Key（{importedKeys.length}）</h2>
-            <button
-              type="button"
-              className="primary ghosted"
-              onClick={() => void handleImportBib()}
-              disabled={isImporting || isLoading}
-            >
-              {isImporting ? "导入中..." : "导入 .bib"}
-            </button>
+            <div className="header-button-group">
+              <button
+                type="button"
+                className="primary ghosted"
+                onClick={() => void handleImportBib()}
+                disabled={isImporting || isLoading}
+              >
+                {isImporting ? "导入中..." : "导入 .bib"}
+              </button>
+              <button
+                type="button"
+                className="danger"
+                onClick={() => void handleClearLibrary()}
+                disabled={isClearingLibrary || isLoading}
+              >
+                {isClearingLibrary ? "清空中..." : "清空数据库"}
+              </button>
+            </div>
           </div>
 
           <ul className="key-list">

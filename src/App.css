@@ -114,6 +114,13 @@ body {
   margin-bottom: var(--space-sm);
 }
 
+.header-button-group {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .panel h2 {
   margin: 0;
   font-size: 1.04rem;
@@ -141,6 +148,30 @@ textarea {
   line-height: 1.5;
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.inline-setting-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.index-input {
+  width: 160px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--panel-strong);
+  color: var(--ink-900);
+  padding: 9px 11px;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.index-input:focus {
+  border-color: rgba(15, 95, 140, 0.72);
+  box-shadow: 0 0 0 3px rgba(15, 95, 140, 0.16);
 }
 
 textarea:focus {
@@ -208,6 +239,15 @@ button:disabled {
 
 .secondary:hover {
   background: #dde7f1;
+}
+
+.danger {
+  background: #f5d7d7;
+  color: #7d1e1e;
+}
+
+.danger:hover {
+  background: #efc4c4;
 }
 
 .ghosted {
@@ -303,6 +343,24 @@ button:disabled {
   .panel-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .header-button-group {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .header-button-group button {
+    flex: 1;
+  }
+
+  .inline-setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .index-input {
+    width: 100%;
   }
 
   .action-row-right {
