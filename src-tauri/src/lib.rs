@@ -1,10 +1,10 @@
-mod bib_parser;
+pub mod bib_parser;
 pub mod citation_engine;
 mod commands;
 pub mod formatter;
-mod models;
-mod state;
-mod storage;
+pub mod models;
+pub mod state;
+pub mod storage;
 
 use std::io;
 

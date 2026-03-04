@@ -24,6 +24,10 @@ impl AppState {
             .join(STATE_FILE_NAME);
 
         let storage = Storage::new(storage_path);
+        Self::from_storage(storage)
+    }
+
+    pub fn from_storage(storage: Storage) -> Result<Self, String> {
         let persisted = storage
             .load_or_default()
             .map_err(|error| error.to_string())?;
