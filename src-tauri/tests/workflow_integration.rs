@@ -84,7 +84,7 @@ fn import_and_cite_workflow_persists_between_sessions() {
         .cite_keys("10648348,10495806")
         .expect("cite should resolve imported keys");
 
-    assert_eq!(first_cite.citation_text, "[1]-[2]");
+    assert_eq!(first_cite.citation_text, "[1],[2]");
     assert_eq!(first_cite.newly_added_count, 2);
     assert!(first_cite
         .cited_references_text

@@ -391,7 +391,7 @@ mod tests {
         let cite_result = app_state
             .cite_keys("k2,k1")
             .expect("cite should succeed after import");
-        assert_eq!(cite_result.citation_text, "[1]-[2]");
+        assert_eq!(cite_result.citation_text, "[1],[2]");
 
         let persisted = storage
             .load_or_default()
