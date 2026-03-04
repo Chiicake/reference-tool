@@ -174,6 +174,12 @@ textarea {
   box-shadow: 0 0 0 3px rgba(15, 95, 140, 0.16);
 }
 
+.hint-text {
+  margin: 6px 2px 0;
+  font-size: 0.84rem;
+  color: var(--ink-500);
+}
+
 textarea:focus {
   border-color: rgba(15, 95, 140, 0.72);
   box-shadow: 0 0 0 3px rgba(15, 95, 140, 0.16);

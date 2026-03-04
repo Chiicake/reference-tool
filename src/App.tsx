@@ -52,14 +52,15 @@ function toErrorMessage(error: unknown): string {
 }
 
 function App() {
-  const [citationInput, setCitationInput] = useState(
-    "10495806,10648348,10980318,10807485",
-  );
+  const [citationInput, setCitationInput] = useState("");
   const [citationOutput, setCitationOutput] = useState("");
   const [citedReferencesText, setCitedReferencesText] = useState("");
   const [importedKeys, setImportedKeys] = useState<string[]>([]);
   const [statusText, setStatusText] = useState("正在加载本地文献状态...");
-  const [nextCitationIndexInput, setNextCitationIndexInput] = useState("1");
+  const [nextCitationIndexInput, setNextCitationIndexInput] = useState("");
+  const [currentNextCitationIndex, setCurrentNextCitationIndex] = useState<
+    number | null
+  >(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
   const [isCiting, setIsCiting] = useState(false);
@@ -75,7 +76,7 @@ function App() {
 
     setImportedKeys(snapshot.importedKeys);
     setCitedReferencesText(referencesText);
-    setNextCitationIndexInput(snapshot.nextCitationIndex.toString());
+    setCurrentNextCitationIndex(snapshot.nextCitationIndex);
 
     return snapshot;
   }, []);
@@ -183,6 +184,7 @@ function App() {
       await invoke<AppSnapshot>("clear_library");
       const snapshot = await refreshSnapshot();
       setCitationOutput("");
+      setNextCitationIndexInput("");
       setStatusText(
         `数据库已清空。当前文献数 ${snapshot.totalEntries}，下一个序号从 ${snapshot.nextCitationIndex} 开始。`,
       );
@@ -211,6 +213,7 @@ function App() {
       await invoke<AppSnapshot>("clear_citations");
       const snapshot = await refreshSnapshot();
       setCitationOutput("");
+      setNextCitationIndexInput("");
       setStatusText(`已有引用已清空，下一个序号重置为 ${snapshot.nextCitationIndex}。`);
     } catch (error) {
       setStatusText(`清空已有引用失败：${toErrorMessage(error)}`);
@@ -240,12 +243,19 @@ function App() {
     setIsSettingNextIndex(true);
 
     try {
-      const snapshot = await invoke<AppSnapshot>("set_next_citation_index", {
-        nextIndex,
-      });
-      setNextCitationIndexInput(snapshot.nextCitationIndex.toString());
+      const payload: { nextIndex?: number } = {};
+      if (nextIndex !== null) {
+        payload.nextIndex = nextIndex;
+      }
+
+      const snapshot = await invoke<AppSnapshot>(
+        "set_next_citation_index",
+        payload,
+      );
+      setCurrentNextCitationIndex(snapshot.nextCitationIndex);
+      setNextCitationIndexInput("");
       setStatusText(
-        `下一个引用序号已设置为 ${snapshot.nextCitationIndex}。`,
+        `下一个引用序号已设置为 ${snapshot.nextCitationIndex}（仅对后续首次引用的新 key 生效）。`,
       );
     } catch (error) {
       setStatusText(`设置下一个序号失败：${toErrorMessage(error)}`);
@@ -265,6 +275,7 @@ function App() {
       const result = await invoke<CiteResult>("cite_keys", {
         input: citationInput,
       });
+      const snapshot = await refreshSnapshot();
 
       setCitationOutput(result.citationText);
       setCitedReferencesText(result.citedReferencesText);
@@ -275,7 +286,7 @@ function App() {
         setStatusText(
           isParagraphMode
             ? `段落引用替换完成：新增 ${result.newlyAddedCount} 条引用。`
-            : `引用完成：新增 ${result.newlyAddedCount} 条引用并返回编号 ${result.citationText}。`,
+            : `引用完成：新增 ${result.newlyAddedCount} 条引用并返回编号 ${result.citationText}（下一个序号：${snapshot.nextCitationIndex}）。`,
         );
       } else {
         setStatusText(
@@ -310,17 +321,17 @@ function App() {
             </div>
 
             <label className="field-title" htmlFor="citation-input">
-              引用框（支持多个 key）
+              引用框
             </label>
             <textarea
               id="citation-input"
               value={citationInput}
               onChange={(event) => setCitationInput(event.currentTarget.value)}
-              placeholder="示例：10495806,10648348,10980318,10807485"
+              placeholder="可输入多个 key，或直接粘贴含 \cite{} 的段落"
             />
 
             <label className="field-title" htmlFor="citation-output">
-              引用返回框（只读）
+              引用返回框
             </label>
             <textarea
               id="citation-output"
@@ -330,7 +341,7 @@ function App() {
             />
 
             <label className="field-title" htmlFor="next-citation-index">
-              设置下一个序号（可在任意时刻设置，留空则按上一个序号自动+1）
+              设置下一个序号
             </label>
             <div className="inline-setting-row">
               <input
@@ -341,7 +352,7 @@ function App() {
                 step={1}
                 value={nextCitationIndexInput}
                 onChange={(event) => setNextCitationIndexInput(event.currentTarget.value)}
-                placeholder="留空自动+1，例如手动设置为16"
+                placeholder="留空自动+1；可手动设为16"
               />
               <button
                 type="button"
@@ -352,6 +363,10 @@ function App() {
                 {isSettingNextIndex ? "设置中..." : "设置下一个"}
               </button>
             </div>
+            <p className="hint-text">
+              当前下一个序号：
+              {currentNextCitationIndex ?? "-"}
+            </p>
 
             <div className="action-row action-row-right">
               <button
