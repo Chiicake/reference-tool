@@ -1,5 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+
+type AppSnapshot = {
+  totalEntries: number;
+  importedKeys: string[];
+  citationOrder: string[];
+};
 
 const demoImportedKeys = [
   "9750059",
@@ -68,9 +75,37 @@ function App() {
   );
   const [citationOutput, setCitationOutput] = useState("");
   const [statusText, setStatusText] = useState(
-    "Step 1 已完成界面骨架，下一步将接入真实 Rust 引用逻辑。",
+    "正在加载本地存储状态...",
   );
   const citedReferencesText = useMemo(() => demoReferences.join("\n\n"), []);
+
+  useEffect(() => {
+    let active = true;
+
+    void invoke<AppSnapshot>("get_app_snapshot")
+      .then((snapshot) => {
+        if (!active) {
+          return;
+        }
+
+        setStatusText(
+          `Step 2 已接入持久化状态层：已加载 ${snapshot.totalEntries} 条本地文献。`,
+        );
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setStatusText(
+          "Step 2 已完成存储层开发；当前预览环境未连接 Tauri 后端，显示演示数据。",
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function copyText(content: string, label: string): Promise<void> {
     if (!content.trim()) {
