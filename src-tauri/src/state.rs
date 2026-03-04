@@ -477,7 +477,12 @@ fn normalize_inline_text(raw: &str) -> String {
 }
 
 fn normalize_authors(raw: &str) -> String {
-    normalize_inline_text(raw).replace(" and ", ", ")
+    normalize_inline_text(raw)
+        .split(" and ")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(" and ")
 }
 
 #[cfg(test)]
@@ -942,7 +947,7 @@ mod tests {
             result.title,
             "Throughput Maximization for RIS-UAV Relaying Communications"
         );
-        assert_eq!(result.authors, "Liu, Xin, Yu, Yingfeng, Li, Feng");
+        assert_eq!(result.authors, "Liu, Xin and Yu, Yingfeng and Li, Feng");
 
         if path.exists() {
             std::fs::remove_file(path).expect("cleanup state file");
