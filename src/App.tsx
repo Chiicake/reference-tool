@@ -307,6 +307,16 @@ function App() {
         <p className="subtitle">
           导入 bib 文献库，按 key 引用并自动维护编号化参考文献总表。
         </p>
+        <div className="hero-pills">
+          <div className="hero-pill">
+            <span>已导入文献</span>
+            <strong>{importedKeys.length}</strong>
+          </div>
+          <div className="hero-pill">
+            <span>下一个序号</span>
+            <strong>{currentNextCitationIndex ?? "-"}</strong>
+          </div>
+        </div>
       </header>
 
       <section className="workspace-grid">
@@ -319,12 +329,12 @@ function App() {
             <label className="field-title" htmlFor="citation-input">
               引用框
             </label>
-            <textarea
-              id="citation-input"
-              value={citationInput}
-              onChange={(event) => setCitationInput(event.currentTarget.value)}
-              placeholder="可输入多个 key，或直接粘贴含 \\cite{} 的段落"
-            />
+              <textarea
+                id="citation-input"
+                value={citationInput}
+                onChange={(event) => setCitationInput(event.currentTarget.value)}
+                placeholder="可输入多个 key，或直接粘贴含 \cite{} 的段落"
+              />
 
             <label className="field-title" htmlFor="citation-output">
               引用返回框
