@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use tauri::{AppHandle, Manager};
 
-use crate::citation_engine::{compress_citation_indexes, parse_citation_keys};
+use crate::citation_engine::{
+    compress_citation_indexes, extract_latex_cite_commands, parse_citation_keys, CiteCommand,
+};
 use crate::formatter::{format_entry, OutputFormat};
 use crate::models::{AppSnapshot, CiteResult, ImportResult, LibraryEntry, PersistedState};
 use crate::storage::Storage;
@@ -146,6 +148,11 @@ impl AppState {
     pub fn cite_keys(&mut self, raw_input: &str) -> Result<CiteResult, String> {
         self.ensure_citation_index_state();
 
+        let cite_commands = extract_latex_cite_commands(raw_input);
+        if !cite_commands.is_empty() {
+            return self.cite_paragraph(raw_input, &cite_commands);
+        }
+
         let keys = parse_citation_keys(raw_input);
         if keys.is_empty() {
             return Err("Citation input is empty. Please provide at least one key.".to_string());
@@ -159,27 +166,91 @@ impl AppState {
             ));
         }
 
-        let mut index_by_key = self
+        let (mut index_by_key, mut seen_in_order) = self.build_lookup_state();
+        let (resolved_indexes, newly_added_count) =
+            self.resolve_indexes_for_keys(&keys, &mut index_by_key, &mut seen_in_order);
+
+        let citation_text = compress_citation_indexes(&resolved_indexes);
+        self.finalize_citation(citation_text, newly_added_count)
+    }
+
+    fn cite_paragraph(
+        &mut self,
+        raw_input: &str,
+        cite_commands: &[CiteCommand],
+    ) -> Result<CiteResult, String> {
+        if cite_commands.iter().any(|command| command.keys.is_empty()) {
+            return Err(
+                "Found empty \\cite{} command. Please provide at least one key.".to_string(),
+            );
+        }
+
+        let requested_keys = cite_commands
+            .iter()
+            .flat_map(|command| command.keys.iter().cloned())
+            .collect::<Vec<_>>();
+
+        let missing_keys = self.collect_missing_keys(&requested_keys);
+        if !missing_keys.is_empty() {
+            return Err(format!(
+                "Missing citation key(s): {}",
+                missing_keys.join(", ")
+            ));
+        }
+
+        let (mut index_by_key, mut seen_in_order) = self.build_lookup_state();
+        let mut rendered = String::with_capacity(raw_input.len() + 32);
+        let mut cursor = 0usize;
+        let mut newly_added_count = 0usize;
+
+        for command in cite_commands {
+            rendered.push_str(&raw_input[cursor..command.start]);
+
+            let (indexes, newly_added) =
+                self.resolve_indexes_for_keys(&command.keys, &mut index_by_key, &mut seen_in_order);
+            newly_added_count += newly_added;
+
+            rendered.push_str(&compress_citation_indexes(&indexes));
+            cursor = command.end;
+        }
+
+        rendered.push_str(&raw_input[cursor..]);
+
+        self.finalize_citation(rendered, newly_added_count)
+    }
+
+    fn build_lookup_state(&self) -> (HashMap<String, usize>, HashSet<String>) {
+        let index_by_key = self
             .persisted
             .citation_index_by_key
             .iter()
             .map(|(key, index)| (key.clone(), *index))
             .collect::<HashMap<_, _>>();
-        let mut seen_in_order = self
+        let seen_in_order = self
             .persisted
             .citation_order
             .iter()
             .cloned()
             .collect::<HashSet<_>>();
 
+        (index_by_key, seen_in_order)
+    }
+
+    fn resolve_indexes_for_keys(
+        &mut self,
+        keys: &[String],
+        index_by_key: &mut HashMap<String, usize>,
+        seen_in_order: &mut HashSet<String>,
+    ) -> (Vec<usize>, usize) {
         let mut resolved_indexes = Vec::with_capacity(keys.len());
-        let mut newly_added_count = 0;
+        let mut newly_added_count = 0usize;
 
         for key in keys {
-            if let Some(index) = index_by_key.get(&key).copied() {
+            if let Some(index) = index_by_key.get(key).copied() {
                 if seen_in_order.insert(key.clone()) {
                     self.persisted.citation_order.push(key.clone());
                 }
+
                 resolved_indexes.push(index);
                 continue;
             }
@@ -190,12 +261,19 @@ impl AppState {
             self.persisted
                 .citation_index_by_key
                 .insert(key.clone(), assigned_index);
-            index_by_key.insert(key, assigned_index);
+            index_by_key.insert(key.clone(), assigned_index);
             resolved_indexes.push(assigned_index);
             newly_added_count += 1;
         }
 
-        let citation_text = compress_citation_indexes(&resolved_indexes);
+        (resolved_indexes, newly_added_count)
+    }
+
+    fn finalize_citation(
+        &mut self,
+        citation_text: String,
+        newly_added_count: usize,
+    ) -> Result<CiteResult, String> {
         let cited_references_text = self.cited_references_text();
 
         self.storage
@@ -466,6 +544,36 @@ mod tests {
         assert!(result
             .cited_references_text
             .contains("[3]  Reference C[J]."));
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn cite_keys_replaces_latex_cite_commands_in_paragraph() {
+        let path = unique_state_path("cite-paragraph");
+        let storage = Storage::new(path.clone());
+
+        let mut persisted = PersistedState::default();
+        persisted
+            .entries
+            .insert("8016573".to_string(), build_entry("8016573", "Reference A"));
+        persisted
+            .entries
+            .insert("9221208".to_string(), build_entry("9221208", "Reference B"));
+        persisted
+            .entries
+            .insert("6425066".to_string(), build_entry("6425066", "Reference C"));
+
+        let mut app_state = AppState { storage, persisted };
+
+        let result = app_state
+            .cite_keys("规模增长\\cite{8016573}，场景普及\\cite{9221208,6425066}。")
+            .expect("paragraph cite should be replaced");
+
+        assert_eq!(result.citation_text, "规模增长[1]，场景普及[2],[3]。");
+        assert_eq!(result.newly_added_count, 3);
 
         if path.exists() {
             std::fs::remove_file(path).expect("cleanup state file");

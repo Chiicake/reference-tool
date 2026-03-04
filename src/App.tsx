@@ -269,12 +269,20 @@ function App() {
       setCitationOutput(result.citationText);
       setCitedReferencesText(result.citedReferencesText);
 
+      const isParagraphMode = citationInput.includes("\\cite");
+
       if (result.newlyAddedCount > 0) {
         setStatusText(
-          `引用完成：新增 ${result.newlyAddedCount} 条引用并返回编号 ${result.citationText}。`,
+          isParagraphMode
+            ? `段落引用替换完成：新增 ${result.newlyAddedCount} 条引用。`
+            : `引用完成：新增 ${result.newlyAddedCount} 条引用并返回编号 ${result.citationText}。`,
         );
       } else {
-        setStatusText(`引用完成：全部为已有引用，返回编号 ${result.citationText}。`);
+        setStatusText(
+          isParagraphMode
+            ? "段落引用替换完成：全部为已有引用。"
+            : `引用完成：全部为已有引用，返回编号 ${result.citationText}。`,
+        );
       }
     } catch (error) {
       setCitationOutput("");

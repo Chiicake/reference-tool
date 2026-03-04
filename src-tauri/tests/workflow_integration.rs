@@ -29,6 +29,36 @@ const SAMPLE_BIB: &str = r#"
   number={4},
   pages={1544-1561}
 }
+
+@ARTICLE{8016573,
+  author={Atzori, Luigi and Iera, Antonio and Morabito, Giacomo},
+  journal={Computer Networks},
+  title={The Internet of Things: A survey},
+  year={2010},
+  volume={54},
+  number={15},
+  pages={2787-2805}
+}
+
+@ARTICLE{9221208,
+  author={Sun, Yuchen and Luo, Jian and Das, Sajal K.},
+  journal={IEEE Network},
+  title={Smart Transportation in IoT Era},
+  year={2021},
+  volume={35},
+  number={1},
+  pages={160-167}
+}
+
+@ARTICLE{6425066,
+  author={Ruiz-Garcia, Luis and Lunadei, Luisa and Barreiro, Pilar and Robla, Jose Ignacio},
+  journal={Computers and Electronics in Agriculture},
+  title={A Review of Wireless Sensor Technologies and Applications in Agriculture},
+  year={2009},
+  volume={67},
+  number={1-2},
+  pages={209-217}
+}
 "#;
 
 const SINGLE_ENTRY_BIB: &str = r#"
@@ -76,8 +106,8 @@ fn import_and_cite_workflow_persists_between_sessions() {
         .import_entries(imported_entries)
         .expect("import should succeed");
 
-    assert_eq!(import_result.total, 2);
-    assert_eq!(import_result.new_count, 2);
+    assert_eq!(import_result.total, 5);
+    assert_eq!(import_result.new_count, 5);
     assert_eq!(import_result.overwritten_count, 0);
 
     let first_cite = first_session
@@ -99,7 +129,7 @@ fn import_and_cite_workflow_persists_between_sessions() {
         AppState::from_storage(storage).expect("reloading app state should succeed");
 
     let snapshot = second_session.snapshot();
-    assert_eq!(snapshot.total_entries, 2);
+    assert_eq!(snapshot.total_entries, 5);
     assert_eq!(snapshot.citation_order, vec!["10648348", "10495806"]);
 
     let second_cite = second_session
@@ -178,6 +208,33 @@ fn sequence_start_can_be_configured_and_resets_after_citation_clear() {
         .cite_keys("9750059")
         .expect("citation after clear should restart from configured start");
     assert_eq!(second_cite.citation_text, "[1]");
+
+    cleanup_if_exists(&path);
+}
+
+#[test]
+fn paragraph_input_replaces_only_latex_cite_commands() {
+    let path = unique_state_path("paragraph-replace");
+    let storage = Storage::new(path.clone());
+
+    let mut app_state =
+        AppState::from_storage(storage).expect("app state initialization should succeed");
+
+    let imported_entries = parse_bib_entries(SAMPLE_BIB).expect("sample bib should parse");
+    app_state
+        .import_entries(imported_entries)
+        .expect("import should succeed");
+
+    let input = "近年来，物联网（Internet of Things, IoT）的应用场景与规模高速扩张，网络连接设备数量快速增长\\cite{8016573}，智慧交通、智慧医疗与智能农业等应用场景不断普及\\cite{9221208,6425066}。";
+
+    let result = app_state
+        .cite_keys(input)
+        .expect("paragraph cite replacement should succeed");
+
+    assert_eq!(
+        result.citation_text,
+        "近年来，物联网（Internet of Things, IoT）的应用场景与规模高速扩张，网络连接设备数量快速增长[1]，智慧交通、智慧医疗与智能农业等应用场景不断普及[2],[3]。"
+    );
 
     cleanup_if_exists(&path);
 }
