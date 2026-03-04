@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use tauri::{AppHandle, Manager};
 
@@ -134,13 +134,14 @@ impl AppState {
 
     fn collect_missing_keys(&self, keys: &[String]) -> Vec<String> {
         let mut missing_keys = Vec::new();
+        let mut seen_missing = HashSet::new();
 
         for key in keys {
             if self.persisted.entries.contains_key(key) {
                 continue;
             }
 
-            if missing_keys.iter().any(|existing| existing == key) {
+            if !seen_missing.insert(key.clone()) {
                 continue;
             }
 
@@ -328,6 +329,74 @@ mod tests {
         assert_eq!(
             error,
             "Citation input is empty. Please provide at least one key."
+        );
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn cite_keys_keeps_non_consecutive_indexes_separated() {
+        let path = unique_state_path("cite-range");
+        let storage = Storage::new(path.clone());
+
+        let mut persisted = PersistedState::default();
+        persisted
+            .entries
+            .insert("k1".to_string(), build_entry("k1", "Reference A"));
+        persisted
+            .entries
+            .insert("k2".to_string(), build_entry("k2", "Reference B"));
+        persisted
+            .entries
+            .insert("k3".to_string(), build_entry("k3", "Reference C"));
+        persisted.citation_order = vec!["k1".to_string(), "k2".to_string(), "k3".to_string()];
+
+        let mut app_state = AppState { storage, persisted };
+
+        let result = app_state
+            .cite_keys("k1, k3")
+            .expect("cite should return non-consecutive indexes");
+
+        assert_eq!(result.citation_text, "[1], [3]");
+        assert_eq!(result.newly_added_count, 0);
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn import_then_cite_persists_to_disk() {
+        let path = unique_state_path("persist-workflow");
+        let storage = Storage::new(path.clone());
+
+        let mut app_state = AppState {
+            storage: storage.clone(),
+            persisted: PersistedState::default(),
+        };
+
+        app_state
+            .import_entries(vec![
+                build_entry("k1", "Reference A"),
+                build_entry("k2", "Reference B"),
+            ])
+            .expect("import should succeed");
+
+        let cite_result = app_state
+            .cite_keys("k2,k1")
+            .expect("cite should succeed after import");
+        assert_eq!(cite_result.citation_text, "[1]-[2]");
+
+        let persisted = storage
+            .load_or_default()
+            .expect("stored state should be readable");
+
+        assert_eq!(persisted.entries.len(), 2);
+        assert_eq!(
+            persisted.citation_order,
+            vec!["k2".to_string(), "k1".to_string()]
         );
 
         if path.exists() {

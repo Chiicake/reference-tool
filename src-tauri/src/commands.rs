@@ -50,6 +50,8 @@ pub fn import_bib_file(
     let parsed_entries = bib_parser::parse_bib_entries(&content)
         .map_err(|error| format!("Failed to parse bib file '{}': {error}", path))?;
 
+    ensure_non_empty_entries(parsed_entries.len(), &path)?;
+
     let mut app_state = state
         .write()
         .map_err(|_| "Failed to write app state: lock poisoned".to_string())?;
@@ -80,9 +82,17 @@ fn ensure_bib_extension(path: &str) -> Result<(), String> {
     Err("Only .bib files are supported for import".to_string())
 }
 
+fn ensure_non_empty_entries(entry_count: usize, path: &str) -> Result<(), String> {
+    if entry_count > 0 {
+        return Ok(());
+    }
+
+    Err(format!("No valid BibTeX entries found in file '{path}'"))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ensure_bib_extension;
+    use super::{ensure_bib_extension, ensure_non_empty_entries};
 
     #[test]
     fn accepts_bib_extension_case_insensitive() {
@@ -94,5 +104,18 @@ mod tests {
     fn rejects_non_bib_extension() {
         assert!(ensure_bib_extension("/tmp/ref.txt").is_err());
         assert!(ensure_bib_extension("/tmp/ref").is_err());
+    }
+
+    #[test]
+    fn rejects_empty_parsed_entry_set() {
+        let result = ensure_non_empty_entries(0, "/tmp/empty.bib");
+        assert!(result
+            .expect_err("empty entry set should fail")
+            .contains("No valid BibTeX entries found"));
+    }
+
+    #[test]
+    fn accepts_non_empty_parsed_entry_set() {
+        assert!(ensure_non_empty_entries(1, "/tmp/data.bib").is_ok());
     }
 }
