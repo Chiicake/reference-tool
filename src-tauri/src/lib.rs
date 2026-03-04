@@ -1,5 +1,7 @@
 mod bib_parser;
+pub mod citation_engine;
 mod commands;
+pub mod formatter;
 mod models;
 mod state;
 mod storage;
