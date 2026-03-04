@@ -1,3 +1,4 @@
+mod bib_parser;
 mod commands;
 mod models;
 mod state;
@@ -18,7 +19,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_snapshot,
-            commands::get_storage_path
+            commands::get_storage_path,
+            commands::import_bib_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

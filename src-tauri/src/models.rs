@@ -61,3 +61,14 @@ impl AppSnapshot {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    pub total: usize,
+    pub imported: usize,
+    pub new_count: usize,
+    pub overwritten_count: usize,
+    pub failed: usize,
+    pub message: String,
+}
