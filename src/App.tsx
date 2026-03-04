@@ -57,6 +57,7 @@ function App() {
   const [citedReferencesText, setCitedReferencesText] = useState("");
   const [importedKeys, setImportedKeys] = useState<string[]>([]);
   const [statusText, setStatusText] = useState("正在加载本地文献状态...");
+  const [isManualOpen, setIsManualOpen] = useState(false);
   const [nextCitationIndexInput, setNextCitationIndexInput] = useState("");
   const [currentNextCitationIndex, setCurrentNextCitationIndex] = useState<
     number | null
@@ -171,13 +172,6 @@ function App() {
       return;
     }
 
-    const shouldClear = window.confirm(
-      "确认清空数据库吗？这会删除所有已导入文献，并清空已有引用列表。",
-    );
-    if (!shouldClear) {
-      return;
-    }
-
     setIsClearingLibrary(true);
 
     try {
@@ -197,13 +191,6 @@ function App() {
 
   async function handleClearCitations(): Promise<void> {
     if (isClearingCitations) {
-      return;
-    }
-
-    const shouldClear = window.confirm(
-      "确认清空已有引用吗？清空后引用编号将从起始序号重新计数。",
-    );
-    if (!shouldClear) {
       return;
     }
 
@@ -306,7 +293,16 @@ function App() {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <p className="eyebrow">Reference Workspace</p>
+        <div className="app-header-top">
+          <p className="eyebrow">Reference Workspace</p>
+          <button
+            type="button"
+            className="secondary manual-button"
+            onClick={() => setIsManualOpen(true)}
+          >
+            说明书
+          </button>
+        </div>
         <h1>文献引用管理工具</h1>
         <p className="subtitle">
           导入 bib 文献库，按 key 引用并自动维护编号化参考文献总表。
@@ -327,7 +323,7 @@ function App() {
               id="citation-input"
               value={citationInput}
               onChange={(event) => setCitationInput(event.currentTarget.value)}
-              placeholder="可输入多个 key，或直接粘贴含 \cite{} 的段落"
+              placeholder="可输入多个 key，或直接粘贴含 \\cite{} 的段落"
             />
 
             <label className="field-title" htmlFor="citation-output">
@@ -453,6 +449,76 @@ function App() {
       <p className="status-bar" role="status">
         {statusText}
       </p>
+
+      {isManualOpen ? (
+        <div className="manual-backdrop" onClick={() => setIsManualOpen(false)}>
+          <section
+            className="manual-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="manual-header">
+              <h2 id="manual-title">使用说明书</h2>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setIsManualOpen(false)}
+              >
+                关闭
+              </button>
+            </div>
+
+            <p>
+              本工具用于管理 bib 文献并快速生成引用编号。核心流程是：导入 bib、输入引用、自动返回编号并维护已引用文献总表。
+            </p>
+
+            <h3>一、导入文献</h3>
+            <p>
+              点击右侧“导入 .bib”，选择文件后会自动按 key 去重并覆盖。右侧列表会刷新显示全部已导入 key。
+            </p>
+
+            <h3>二、引用输入支持</h3>
+            <p>支持两种输入方式：</p>
+            <ol>
+              <li>key 列表模式：`10495806,10648348,10980318`</li>
+              <li>
+                段落模式：在正文中包含 `\\cite&#123;...&#125;`，程序只替换 cite 命令，不改动其他文字
+              </li>
+            </ol>
+
+            <h3>三、示例</h3>
+            <div className="manual-example">
+              <p className="manual-example-title">输入（段落模式）</p>
+              <p>
+                近年来，物联网（Internet of Things,
+                IoT）的应用场景与规模高速扩张，网络连接设备数量快速增长\cite&#123;8016573&#125;，智慧交通、智慧医疗与智能农业等应用场景不断普及\cite&#123;9221208,6425066&#125;。
+              </p>
+              <p className="manual-example-title">输出</p>
+              <p>
+                近年来，物联网（Internet of Things,
+                IoT）的应用场景与规模高速扩张，网络连接设备数量快速增长[1]，智慧交通、智慧医疗与智能农业等应用场景不断普及[2],[3]。
+              </p>
+            </div>
+
+            <h3>四、下一个序号设置</h3>
+            <p>
+              “设置下一个序号”用于控制后续新引用编号：
+              如果当前最大编号是[10]，你手动插入了5条外部文献，可把下一个序号设置为16，则程序内后续新引用会从[16]开始。
+            </p>
+            <p>
+              输入框留空时，点击“设置下一个”会自动采用“当前最大编号+1”。
+            </p>
+
+            <h3>五、清空按钮说明</h3>
+            <ol>
+              <li>清空数据库：删除全部文献并清空引用。</li>
+              <li>清空引用：仅清空已引用列表，文献库保留。</li>
+            </ol>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

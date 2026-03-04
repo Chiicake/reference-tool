@@ -61,6 +61,13 @@ body {
   animation: rise-in 420ms ease;
 }
 
+.app-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
 .eyebrow {
   margin: 0;
   font-size: 12px;
@@ -247,6 +254,10 @@ button:disabled {
   background: #dde7f1;
 }
 
+.manual-button {
+  white-space: nowrap;
+}
+
 .danger {
   background: #f5d7d7;
   color: #7d1e1e;
@@ -310,6 +321,70 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.manual-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  background: rgba(19, 30, 44, 0.45);
+}
+
+.manual-modal {
+  width: min(920px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(166, 185, 205, 0.68);
+  background: #fefefe;
+  box-shadow: 0 24px 56px rgba(15, 30, 49, 0.35);
+  padding: 18px 20px;
+}
+
+.manual-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.manual-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.manual-modal h3 {
+  margin: 14px 0 6px;
+  font-size: 1rem;
+}
+
+.manual-modal p,
+.manual-modal li {
+  color: var(--ink-700);
+  line-height: 1.55;
+}
+
+.manual-modal ol {
+  margin: 6px 0 6px 22px;
+  padding: 0;
+}
+
+.manual-example {
+  border: 1px solid rgba(181, 199, 216, 0.9);
+  border-radius: var(--radius-md);
+  background: #f7fafc;
+  padding: 10px 12px;
+}
+
+.manual-example-title {
+  margin: 4px 0;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -346,6 +421,10 @@ button:disabled {
     padding: 14px;
   }
 
+  .app-header-top {
+    align-items: flex-start;
+  }
+
   .panel-header {
     align-items: flex-start;
     flex-direction: column;
@@ -367,6 +446,14 @@ button:disabled {
 
   .index-input {
     width: 100%;
+  }
+
+  .manual-backdrop {
+    padding: 10px;
+  }
+
+  .manual-modal {
+    padding: 14px;
   }
 
   .action-row-right {
