@@ -101,3 +101,11 @@ pub struct CiteResult {
     pub cited_references_text: String,
     pub newly_added_count: usize,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryLookupResult {
+    pub key: String,
+    pub title: String,
+    pub authors: String,
+}

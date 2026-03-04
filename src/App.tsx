@@ -26,6 +26,12 @@ type CiteResult = {
   newlyAddedCount: number;
 };
 
+type EntryLookupResult = {
+  key: string;
+  title: string;
+  authors: string;
+};
+
 type ErrorLike = {
   message?: string;
 };
@@ -59,6 +65,8 @@ function App() {
   const [statusText, setStatusText] = useState("正在加载本地文献状态...");
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [nextCitationIndexInput, setNextCitationIndexInput] = useState("");
+  const [lookupKeyInput, setLookupKeyInput] = useState("");
+  const [lookupResult, setLookupResult] = useState<EntryLookupResult | null>(null);
   const [currentNextCitationIndex, setCurrentNextCitationIndex] = useState<
     number | null
   >(null);
@@ -68,6 +76,7 @@ function App() {
   const [isClearingLibrary, setIsClearingLibrary] = useState(false);
   const [isClearingCitations, setIsClearingCitations] = useState(false);
   const [isSettingNextIndex, setIsSettingNextIndex] = useState(false);
+  const [isLookingUpEntry, setIsLookingUpEntry] = useState(false);
 
   const refreshSnapshot = useCallback(async (): Promise<AppSnapshot> => {
     const [snapshot, referencesText] = await Promise.all([
@@ -179,6 +188,8 @@ function App() {
       const snapshot = await refreshSnapshot();
       setCitationOutput("");
       setNextCitationIndexInput("");
+      setLookupResult(null);
+      setLookupKeyInput("");
       setStatusText(
         `数据库已清空。当前文献数 ${snapshot.totalEntries}，下一个序号从 ${snapshot.nextCitationIndex} 开始。`,
       );
@@ -201,6 +212,7 @@ function App() {
       const snapshot = await refreshSnapshot();
       setCitationOutput("");
       setNextCitationIndexInput("");
+      setLookupResult(null);
       setStatusText(`已有引用已清空，下一个序号重置为 ${snapshot.nextCitationIndex}。`);
     } catch (error) {
       setStatusText(`清空已有引用失败：${toErrorMessage(error)}`);
@@ -248,6 +260,35 @@ function App() {
       setStatusText(`设置下一个序号失败：${toErrorMessage(error)}`);
     } finally {
       setIsSettingNextIndex(false);
+    }
+  }
+
+  async function handleLookupEntryByKey(): Promise<void> {
+    if (isLookingUpEntry) {
+      return;
+    }
+
+    const normalizedKey = lookupKeyInput.trim();
+    if (!normalizedKey) {
+      setLookupResult(null);
+      setStatusText("请先输入要查找的 key。");
+      return;
+    }
+
+    setIsLookingUpEntry(true);
+
+    try {
+      const result = await invoke<EntryLookupResult>("find_entry_by_key", {
+        key: normalizedKey,
+      });
+
+      setLookupResult(result);
+      setStatusText(`已找到 key ${result.key} 对应文献。`);
+    } catch (error) {
+      setLookupResult(null);
+      setStatusText(`查找失败：${toErrorMessage(error)}`);
+    } finally {
+      setIsLookingUpEntry(false);
     }
   }
 
@@ -333,7 +374,7 @@ function App() {
                 id="citation-input"
                 value={citationInput}
                 onChange={(event) => setCitationInput(event.currentTarget.value)}
-                placeholder="可输入多个 key，或直接粘贴含 \cite{} 的段落"
+                placeholder="可输入多个 key，或直接粘贴含 \\cite{} 的段落"
               />
 
             <label className="field-title" htmlFor="citation-output">
@@ -445,6 +486,55 @@ function App() {
               </button>
             </div>
           </div>
+
+          <section className="lookup-panel">
+            <label className="field-title" htmlFor="lookup-key-input">
+              根据 key 查找文献名称与作者
+            </label>
+            <div className="lookup-row">
+              <input
+                id="lookup-key-input"
+                className="lookup-input"
+                type="text"
+                value={lookupKeyInput}
+                onChange={(event) => setLookupKeyInput(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleLookupEntryByKey();
+                  }
+                }}
+                placeholder="输入 key，例如 9750059"
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void handleLookupEntryByKey()}
+                disabled={isLookingUpEntry || isLoading}
+              >
+                {isLookingUpEntry ? "查找中..." : "查找"}
+              </button>
+            </div>
+
+            {lookupResult ? (
+              <div className="lookup-result-box">
+                <p>
+                  <strong>Key：</strong>
+                  {lookupResult.key}
+                </p>
+                <p>
+                  <strong>题名：</strong>
+                  {lookupResult.title}
+                </p>
+                <p>
+                  <strong>作者：</strong>
+                  {lookupResult.authors}
+                </p>
+              </div>
+            ) : (
+              <p className="lookup-empty">输入 key 后点击查找，即可查看文献名称与作者。</p>
+            )}
+          </section>
 
           <ul className="key-list">
             {importedKeys.length > 0 ? (

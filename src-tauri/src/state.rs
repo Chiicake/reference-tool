@@ -6,7 +6,9 @@ use crate::citation_engine::{
     compress_citation_indexes, extract_latex_cite_commands, parse_citation_keys, CiteCommand,
 };
 use crate::formatter::{format_entry, OutputFormat};
-use crate::models::{AppSnapshot, CiteResult, ImportResult, LibraryEntry, PersistedState};
+use crate::models::{
+    AppSnapshot, CiteResult, EntryLookupResult, ImportResult, LibraryEntry, PersistedState,
+};
 use crate::storage::Storage;
 
 const STATE_FILE_NAME: &str = "library_state.json";
@@ -55,6 +57,36 @@ impl AppState {
 
     pub fn next_citation_index(&self) -> usize {
         self.persisted.next_citation_index
+    }
+
+    pub fn find_entry_by_key(&self, key: &str) -> Option<EntryLookupResult> {
+        let normalized_key = key.trim();
+        if normalized_key.is_empty() {
+            return None;
+        }
+
+        let entry = self.persisted.entries.get(normalized_key)?;
+
+        let title = entry
+            .fields
+            .get("title")
+            .map(|value| normalize_inline_text(value))
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| entry.key.clone());
+
+        let authors = entry
+            .fields
+            .get("author")
+            .or_else(|| entry.fields.get("editor"))
+            .map(|value| normalize_authors(value))
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "未知作者".to_string());
+
+        Some(EntryLookupResult {
+            key: entry.key.clone(),
+            title,
+            authors,
+        })
     }
 
     pub fn import_entries(&mut self, entries: Vec<LibraryEntry>) -> Result<ImportResult, String> {
@@ -435,6 +467,17 @@ fn normalize_persisted_state(persisted: &mut PersistedState) {
 fn dedup_citation_order(order: &mut Vec<String>) {
     let mut seen = HashSet::new();
     order.retain(|key| seen.insert(key.clone()));
+}
+
+fn normalize_inline_text(raw: &str) -> String {
+    raw.replace(['{', '}'], " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn normalize_authors(raw: &str) -> String {
+    normalize_inline_text(raw).replace(" and ", ", ")
 }
 
 #[cfg(test)]
@@ -857,6 +900,66 @@ mod tests {
         assert!(app_state.persisted.citation_order.is_empty());
         assert!(app_state.persisted.citation_index_by_key.is_empty());
         assert_eq!(app_state.persisted.next_citation_index, 1);
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn find_entry_by_key_returns_title_and_authors() {
+        let path = unique_state_path("lookup-entry");
+        let storage = Storage::new(path.clone());
+
+        let mut persisted = PersistedState::default();
+        let mut fields = BTreeMap::new();
+        fields.insert(
+            "title".to_string(),
+            "{Throughput Maximization for RIS-UAV Relaying Communications}".to_string(),
+        );
+        fields.insert(
+            "author".to_string(),
+            "Liu, Xin and Yu, Yingfeng and Li, Feng".to_string(),
+        );
+
+        persisted.entries.insert(
+            "9750059".to_string(),
+            LibraryEntry {
+                key: "9750059".to_string(),
+                entry_type: "ARTICLE".to_string(),
+                fields,
+                raw: None,
+            },
+        );
+
+        let app_state = AppState { storage, persisted };
+        let result = app_state
+            .find_entry_by_key("9750059")
+            .expect("entry should be found");
+
+        assert_eq!(result.key, "9750059");
+        assert_eq!(
+            result.title,
+            "Throughput Maximization for RIS-UAV Relaying Communications"
+        );
+        assert_eq!(result.authors, "Liu, Xin, Yu, Yingfeng, Li, Feng");
+
+        if path.exists() {
+            std::fs::remove_file(path).expect("cleanup state file");
+        }
+    }
+
+    #[test]
+    fn find_entry_by_key_returns_none_for_missing_key() {
+        let path = unique_state_path("lookup-missing");
+        let storage = Storage::new(path.clone());
+
+        let app_state = AppState {
+            storage,
+            persisted: PersistedState::default(),
+        };
+
+        assert!(app_state.find_entry_by_key("missing").is_none());
 
         if path.exists() {
             std::fs::remove_file(path).expect("cleanup state file");

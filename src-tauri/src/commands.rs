@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use tauri::State;
 
 use crate::bib_parser;
-use crate::models::{AppSnapshot, CiteResult, ImportResult};
+use crate::models::{AppSnapshot, CiteResult, EntryLookupResult, ImportResult};
 use crate::state::AppState;
 
 pub type SharedAppState = RwLock<AppState>;
@@ -99,6 +99,25 @@ pub fn set_next_citation_index(
 
     app_state.set_next_citation_index(next_index)?;
     Ok(app_state.snapshot())
+}
+
+#[tauri::command]
+pub fn find_entry_by_key(
+    key: String,
+    state: State<'_, SharedAppState>,
+) -> Result<EntryLookupResult, String> {
+    let normalized_key = key.trim();
+    if normalized_key.is_empty() {
+        return Err("Key 不能为空".to_string());
+    }
+
+    let app_state = state
+        .read()
+        .map_err(|_| "Failed to read app state: lock poisoned".to_string())?;
+
+    app_state
+        .find_entry_by_key(normalized_key)
+        .ok_or_else(|| format!("未找到 key: {normalized_key}"))
 }
 
 fn ensure_bib_extension(path: &str) -> Result<(), String> {

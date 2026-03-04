@@ -28,7 +28,8 @@ pub fn run() {
             commands::cite_keys,
             commands::clear_library,
             commands::clear_citations,
-            commands::set_next_citation_index
+            commands::set_next_citation_index,
+            commands::find_entry_by_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
